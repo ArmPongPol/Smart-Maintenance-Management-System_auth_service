@@ -1,8 +1,7 @@
 import { UserStatusEnum } from '@/common/constants/enum';
-import {
-  AuthenticatedUser,
-  JwtAccessPayload,
-} from '@/common/interfaces/jwt-payload.interface';
+import { JwtAccessPayload } from '@/common/interfaces/jwt-payload.interface';
+import { User } from '@/modules/users/entities/user.entity';
+import { UserCacheService } from '@/modules/users/user-cache.service';
 import { UsersService } from '@/modules/users/users.service';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,6 +13,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     config: ConfigService,
     private readonly usersService: UsersService,
+    private readonly userCache: UserCacheService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -27,9 +27,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   // Called only after passport-jwt has verified signature, expiry, issuer and
-  // audience. The user is re-read so a role change or deactivation takes effect
-  // immediately instead of when the token expires.
-  async validate(payload: JwtAccessPayload): Promise<AuthenticatedUser> {
+  // audience. The user is re-read (through a cache of a few seconds that
+  // UsersService invalidates on change) so a role change or deactivation
+  // takes effect right away instead of when the token expires.
+  //
+  // The returned User (no password hash) becomes request.user; it is a
+  // superset of AuthenticatedUser ({ id, email, role }).
+  async validate(payload: JwtAccessPayload): Promise<User> {
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Expected an access token');
     }
@@ -38,13 +42,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Token has no expiry');
     }
 
-    const user = await this.usersService.findOne(payload.sub);
-    if (!user) throw new UnauthorizedException('Account no longer exists');
-
-    if (user.status !== UserStatusEnum.ACTIVE) {
-      throw new UnauthorizedException('Account is inactive');
+    const user = await this.userCache.getOrLoad(payload.sub, () =>
+      this.usersService.findOne(payload.sub),
+    );
+    // One message for both cases: don't reveal whether the account exists.
+    if (!user || user.status !== UserStatusEnum.ACTIVE) {
+      throw new UnauthorizedException('Account not found or inactive');
     }
 
-    return { id: user.id, email: user.email, role: user.role };
+    return user;
   }
 }

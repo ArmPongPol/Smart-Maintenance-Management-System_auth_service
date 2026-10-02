@@ -5,8 +5,10 @@ import {
   HttpStatus,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { QueryFailedError } from 'typeorm';
 import { requestIdMiddleware } from '../middleware/request-id.middleware';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
@@ -151,5 +153,87 @@ describe('AllExceptionsFilter', () => {
       error.stack,
     );
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  describe('Postgres errors', () => {
+    const pgError = (code: string) =>
+      new QueryFailedError(
+        'SELECT 1',
+        [],
+        Object.assign(new Error(`pg says ${code}`), { code }),
+      );
+
+    it.each([
+      ['23502', 400, 'Invalid request data'],
+      ['22P02', 400, 'Invalid request data'],
+      ['23514', 400, 'Invalid request data'],
+      ['23505', 409, 'Resource already exists'],
+      ['55P03', 503, 'Service temporarily unavailable, please retry'],
+      ['57014', 503, 'Service temporarily unavailable, please retry'],
+    ])('maps %s to %i', (code, status, message) => {
+      const { host, response } = createHost();
+
+      filter.catch(pgError(code), host);
+
+      expect(response.status).toHaveBeenCalledWith(status);
+      expect(response.json).toHaveBeenCalledWith({
+        status,
+        message,
+        data: null,
+      });
+    });
+
+    it('logs the code but never sends the driver message', () => {
+      const { host, response } = createHost();
+
+      filter.catch(pgError('23505'), host);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[-] GET /users/1 409 - Resource already exists (pg 23505)',
+      );
+      expect(JSON.stringify(response.json.mock.calls)).not.toContain('pg says');
+    });
+
+    it('keeps other database errors a generic 500', () => {
+      const { host, response } = createHost();
+
+      filter.catch(pgError('XX000'), host);
+
+      expect(response.status).toHaveBeenCalledWith(500);
+      expect(response.json).toHaveBeenCalledWith({
+        status: 500,
+        message: 'Internal server error',
+        data: null,
+      });
+    });
+  });
+
+  it('logs an exception cause without sending it', () => {
+    const { host, response } = createHost();
+
+    filter.catch(
+      new UnauthorizedException('Unauthorized', { cause: 'jwt expired' }),
+      host,
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[-] GET /users/1 401 - Unauthorized (jwt expired)',
+    );
+    expect(response.json).toHaveBeenCalledWith({
+      status: 401,
+      message: 'Unauthorized',
+      data: null,
+    });
+  });
+
+  it('only logs when the response headers were already sent', () => {
+    const { host, response } = createHost();
+    Object.assign(response, { headersSent: true });
+
+    filter.catch(new Error('stream broke'), host);
+
+    expect(errorSpy).toHaveBeenCalled();
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
   });
 });

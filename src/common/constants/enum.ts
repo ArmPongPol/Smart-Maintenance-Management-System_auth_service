@@ -19,7 +19,7 @@ export enum MachineStatusEnum {
 
 export enum MaintenancePriorityEnum {
   LOW = 'LOW',
-  MIDDLE = 'MIDDLE',
+  MEDIUM = 'MEDIUM',
   HIGH = 'HIGH',
   CRITICAL = 'CRITICAL',
 }

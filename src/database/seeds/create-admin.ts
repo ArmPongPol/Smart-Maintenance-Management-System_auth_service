@@ -1,6 +1,7 @@
 import * as argon2 from 'argon2';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { ARGON2_OPTIONS } from '../../common/constants/argon2';
 import { UserRoleEnum } from '../../common/constants/enum';
 import { CreateUserDto } from '../../modules/users/dto/create-user.dto';
 import { User } from '../../modules/users/entities/user.entity';
@@ -37,7 +38,10 @@ async function main(): Promise<void> {
       return;
     }
 
-    await users.insert({ ...dto, password: await argon2.hash(dto.password) });
+    await users.insert({
+      ...dto,
+      password: await argon2.hash(dto.password, ARGON2_OPTIONS),
+    });
     console.log(`Created admin ${dto.email}.`);
   } finally {
     await dataSource.destroy();

@@ -1,6 +1,9 @@
 import { UserRoleEnum } from '../constants/enum';
 
-/** What JwtStrategy.validate() puts on request.user. */
+/**
+ * The minimum every consumer of request.user may rely on. JwtStrategy actually
+ * puts the whole User entity there (never with its password hash).
+ */
 export interface AuthenticatedUser {
   id: string;
   email: string;
@@ -26,5 +29,9 @@ export interface JwtAccessPayload extends JwtRegisteredClaims {
 export interface JwtRefreshPayload extends JwtRegisteredClaims {
   /** user id */
   sub: string;
+  /** refresh session id (refresh_sessions.id) */
+  sid: string;
+  /** session generation this token was issued for */
+  gen: number;
   type: 'refresh';
 }

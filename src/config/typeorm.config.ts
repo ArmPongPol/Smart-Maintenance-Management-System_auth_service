@@ -2,6 +2,14 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { join } from 'path';
 
+// Server-side limits applied to every pooled connection. A runaway query or a
+// transaction left open by a bug is cut off instead of holding a connection
+// (and its locks) indefinitely.
+export const STATEMENT_TIMEOUT_MS = 5000;
+export const IDLE_IN_TRANSACTION_TIMEOUT_MS = 10000;
+// Queries slower than this are logged by TypeORM as "query is slow".
+export const SLOW_QUERY_MS = 500;
+
 export function buildTypeOrmOptions(
   config: ConfigService,
 ): TypeOrmModuleOptions {
@@ -28,6 +36,15 @@ export function buildTypeOrmOptions(
             config.get<boolean>('database.sslRejectUnauthorized') ?? true,
         }
       : false,
+    poolSize: config.get<number>('database.poolSize') ?? 10,
+    // Fail fast when the pool is exhausted or the server is unreachable.
+    connectTimeoutMS: 3000,
+    extra: {
+      statement_timeout: STATEMENT_TIMEOUT_MS,
+      idle_in_transaction_session_timeout: IDLE_IN_TRANSACTION_TIMEOUT_MS,
+      application_name: 'my-project',
+    },
+    maxQueryExecutionTime: SLOW_QUERY_MS,
     autoLoadEntities: true,
     synchronize,
     logging: config.get<boolean>('database.logging'),

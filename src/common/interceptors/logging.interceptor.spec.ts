@@ -79,6 +79,18 @@ describe('LoggingInterceptor', () => {
     expect(logSpy).not.toHaveBeenCalled();
   });
 
+  it.each(['/health/live', '/health/ready', '/api/health/live?x=1'])(
+    'does not log health probes (%s)',
+    async (url) => {
+      const context = createContext(200);
+      context.switchToHttp().getRequest<Request>().originalUrl = url;
+
+      await firstValueFrom(interceptor.intercept(context, handlerOf('ok')));
+
+      expect(logSpy).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not log non-http contexts', async () => {
     await firstValueFrom(
       interceptor.intercept(createContext(200, 'rpc'), handlerOf('ok')),

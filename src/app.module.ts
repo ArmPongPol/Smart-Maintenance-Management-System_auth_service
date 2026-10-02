@@ -11,9 +11,11 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import appConfig from './config/app.config';
+import cacheConfig from './config/cache.config';
 import databaseConfig from './config/database.config';
 import docsConfig from './config/docs.config';
 import { envValidationSchema } from './config/env.validation';
+import hashingConfig from './config/hashing.config';
 import jwtConfig from './config/jwt.config';
 import { buildTypeOrmOptions } from './config/typeorm.config';
 
@@ -21,7 +23,14 @@ import { buildTypeOrmOptions } from './config/typeorm.config';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, docsConfig, jwtConfig],
+      load: [
+        appConfig,
+        cacheConfig,
+        databaseConfig,
+        docsConfig,
+        hashingConfig,
+        jwtConfig,
+      ],
       validationSchema: envValidationSchema,
     }),
     TypeOrmModule.forRootAsync({
