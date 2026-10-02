@@ -1,0 +1,28 @@
+# Local PostgreSQL for development. The app itself runs on the host (`npm run start:dev`).
+#
+# Values are read from `.env` in this folder (Compose loads it automatically), the same
+# file the app reads, so database credentials live in one place. The defaults after `:-`
+# apply only when a variable is not set.
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${DATABASE_DATABASE:-my_project}
+    ports:
+      # Bound to localhost only, so the database is not reachable from the network.
+      - '127.0.0.1:${DATABASE_PORT:-5432}:5432'
+    volumes:
+      # Postgres 18+ images keep data under /var/lib/postgresql (not .../data as before).
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
